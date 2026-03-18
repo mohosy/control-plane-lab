@@ -200,10 +200,11 @@ class Topology:
 
     @classmethod
     def from_dict(cls, data: Dict[str, object]) -> "Topology":
-        routers = {
-            router.name: router
-            for router in (Router.from_dict(item) for item in data.get("routers", []))
-        }
+        routers: Dict[str, Router] = {}
+        for router in (Router.from_dict(item) for item in data.get("routers", [])):
+            if router.name in routers:
+                raise ValueError("Duplicate router name: {0}".format(router.name))
+            routers[router.name] = router
         topology = cls(
             name=str(data["name"]),
             routers=routers,
@@ -215,15 +216,75 @@ class Topology:
         return topology
 
     def validate(self) -> None:
+        if not self.name.strip():
+            raise ValueError("Topology name must not be empty")
+        if not self.routers:
+            raise ValueError("Topology must define at least one router")
+
+        router_ids: Dict[IPv4Address, str] = {}
+        probe_names = set()
+        bgp_sessions = set()
+        links = set()
+
+        for router in self.routers.values():
+            if router.asn <= 0:
+                raise ValueError("Router {0} has invalid ASN {1}".format(router.name, router.asn))
+            existing_router = router_ids.get(router.router_id)
+            if existing_router is not None:
+                raise ValueError(
+                    "Duplicate router ID {0} on {1} and {2}".format(
+                        router.router_id, existing_router, router.name
+                    )
+                )
+            router_ids[router.router_id] = router.name
+
+            prefixes = set()
+            for connected in router.connected_prefixes:
+                if connected.prefix in prefixes:
+                    raise ValueError(
+                        "Duplicate connected prefix {0} on router {1}".format(
+                            connected.prefix, router.name
+                        )
+                    )
+                prefixes.add(connected.prefix)
+
         for link in self.links:
             if link.a not in self.routers or link.b not in self.routers:
                 raise ValueError("Unknown router in link {0}<->{1}".format(link.a, link.b))
+            if link.a == link.b:
+                raise ValueError("Link endpoints must be distinct: {0}".format(link.a))
             if set(link.addresses.keys()) != {link.a, link.b}:
                 raise ValueError(
                     "Link {0}<->{1} must define addresses for both endpoints".format(
                         link.a, link.b
                     )
                 )
+            if link.metric <= 0:
+                raise ValueError(
+                    "Link {0}<->{1} must have a positive metric".format(link.a, link.b)
+                )
+            link_key = tuple(sorted((link.a, link.b)))
+            if link_key in links:
+                raise ValueError(
+                    "Duplicate link defined between {0} and {1}".format(link.a, link.b)
+                )
+            links.add(link_key)
+
+            addresses = list(link.addresses.values())
+            if len(set(addresses)) != 2:
+                raise ValueError(
+                    "Link {0}<->{1} must use unique interface addresses".format(
+                        link.a, link.b
+                    )
+                )
+            for router_name, address in link.addresses.items():
+                if address not in link.network:
+                    raise ValueError(
+                        "Address {0} for router {1} is not in link network {2}".format(
+                            address, router_name, link.network
+                        )
+                    )
+
         for session in self.bgp_sessions:
             if session.local not in self.routers or session.peer not in self.routers:
                 raise ValueError(
@@ -231,9 +292,24 @@ class Topology:
                         session.local, session.peer
                     )
                 )
+            if session.local == session.peer:
+                raise ValueError(
+                    "BGP session must use two distinct routers: {0}".format(session.local)
+                )
+            session_key = (session.local, session.peer)
+            if session_key in bgp_sessions:
+                raise ValueError(
+                    "Duplicate directed BGP session {0}->{1}".format(
+                        session.local, session.peer
+                    )
+                )
+            bgp_sessions.add(session_key)
         for probe in self.probes:
             if probe.source not in self.routers:
                 raise ValueError("Unknown probe source router {0}".format(probe.source))
+            if probe.name in probe_names:
+                raise ValueError("Duplicate probe name: {0}".format(probe.name))
+            probe_names.add(probe.name)
 
     def clone(self) -> "Topology":
         return copy.deepcopy(self)

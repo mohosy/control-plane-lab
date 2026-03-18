@@ -15,6 +15,7 @@ from .simulation import (
     run_probes,
     trace_path,
 )
+from .validation import ValidationReport, validate_topology
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,6 +44,15 @@ def build_parser() -> argparse.ArgumentParser:
     _add_topology_argument(probes)
     probes.add_argument("--json", action="store_true", help="Emit machine-readable output")
 
+    validate = subparsers.add_parser("validate", help="Validate topology assumptions")
+    _add_topology_argument(validate)
+    validate.add_argument("--json", action="store_true", help="Emit machine-readable output")
+    validate.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero if validation reports warnings",
+    )
+
     incident = subparsers.add_parser("incident", help="Apply events and report the delta")
     _add_topology_argument(incident)
     incident.add_argument("--scenario", help="Path to a JSON scenario file")
@@ -60,7 +70,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: List[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    topology = load_topology(args.topology)
+    try:
+        topology = load_topology(args.topology)
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        parser.exit(2, "error: {0}\n".format(exc))
 
     if args.command == "summary":
         result = analyze_topology(topology)
@@ -100,19 +113,30 @@ def main(argv: List[str] | None = None) -> int:
         _emit(payload, args.json, _render_probes)
         return 0
 
+    if args.command == "validate":
+        report = validate_topology(topology)
+        payload = _validation_payload(report)
+        _emit(payload, args.json, _render_validation)
+        if args.strict and (payload["errors"] or payload["warnings"]):
+            return 1
+        return 0
+
     if args.command == "incident":
         events = []
         if args.scenario:
             events.extend(load_scenario(args.scenario))
         events.extend(parse_event_token(token) for token in args.event)
 
-        baseline = analyze_topology(topology)
-        after_topology = apply_events(topology, events)
-        after = analyze_topology(after_topology)
-        delta = diff_incident(baseline, after, topology.probes)
-        payload = _incident_payload(topology.name, events, delta)
-        _emit(payload, args.json, _render_incident)
-        return 0
+        try:
+            baseline = analyze_topology(topology)
+            after_topology = apply_events(topology, events)
+            after = analyze_topology(after_topology)
+            delta = diff_incident(baseline, after, topology.probes)
+            payload = _incident_payload(topology.name, events, delta)
+            _emit(payload, args.json, _render_incident)
+            return 0
+        except ValueError as exc:
+            parser.exit(2, "error: {0}\n".format(exc))
 
     return 1
 
@@ -219,6 +243,20 @@ def _incident_payload(name: str, events, delta: IncidentDelta):
                 "after": _trace_payload(after),
             }
             for probe, before, after in delta.probe_deltas
+        ],
+    }
+
+
+def _validation_payload(report: ValidationReport):
+    return {
+        "topology": report.topology,
+        "errors": [
+            {"code": item.code, "message": item.message}
+            for item in report.errors
+        ],
+        "warnings": [
+            {"code": item.code, "message": item.message}
+            for item in report.warnings
         ],
     }
 
@@ -358,6 +396,32 @@ def _render_incident(payload) -> str:
             )
             lines.append("  before: {0}".format(before_path or probe["before"]["reason"]))
             lines.append("  after: {0}".format(after_path or probe["after"]["reason"]))
+    return "\n".join(lines)
+
+
+def _render_validation(payload) -> str:
+    lines = [
+        "Validation report for {0}".format(payload["topology"]),
+        "Errors: {0}".format(len(payload["errors"])),
+        "Warnings: {0}".format(len(payload["warnings"])),
+    ]
+    if not payload["errors"] and not payload["warnings"]:
+        lines.append("")
+        lines.append("No validation issues detected.")
+        return "\n".join(lines)
+
+    if payload["errors"]:
+        lines.append("")
+        lines.append("Errors:")
+        for item in payload["errors"]:
+            lines.append("- [{0}] {1}".format(item["code"], item["message"]))
+
+    if payload["warnings"]:
+        lines.append("")
+        lines.append("Warnings:")
+        for item in payload["warnings"]:
+            lines.append("- [{0}] {1}".format(item["code"], item["message"]))
+
     return "\n".join(lines)
 
 

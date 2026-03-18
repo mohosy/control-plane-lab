@@ -15,6 +15,7 @@ The simulator supports a practical subset of control-plane behavior that is usef
 - Import policy controls including `local-pref`
 - `next-hop-self` behavior for internal route distribution
 - Recursive forwarding analysis from BGP next hops into the IGP
+- Structural and operational validation for topology quality checks
 - Incident comparison before and after link, peering, or prefix events
 - JSON output for automation and downstream tooling
 
@@ -61,6 +62,7 @@ Run the CLI directly from the repository:
 PYTHONPATH=src python3 -m control_plane_lab summary examples/trading_fabric.json
 PYTHONPATH=src python3 -m control_plane_lab routes examples/trading_fabric.json ny5-core-b
 PYTHONPATH=src python3 -m control_plane_lab path examples/trading_fabric.json ny5-core-a 198.18.10.10
+PYTHONPATH=src python3 -m control_plane_lab validate examples/trading_fabric.json
 PYTHONPATH=src python3 -m control_plane_lab incident examples/trading_fabric.json --scenario examples/market_failover.json
 ```
 
@@ -72,8 +74,10 @@ After installation, the same commands are available through the `cplab` entrypoi
 - `cplab routes <topology.json> <router>` displays the best route to each known prefix from a selected router.
 - `cplab path <topology.json> <router> <destination-ip>` traces forwarding decisions hop by hop.
 - `cplab probes <topology.json>` runs all configured probes in the topology file.
+- `cplab validate <topology.json>` reports structural and operational warnings for the baseline topology.
 - `cplab incident <topology.json> --scenario <scenario.json>` applies a failure scenario and reports route and reachability deltas.
 - Add `--json` to any command for machine-readable output.
+- Add `--strict` to `validate` to return a non-zero exit code when warnings are present.
 
 ## Example Output
 
@@ -154,19 +158,41 @@ Probe deltas:
 - Forwarding traces recursively resolve BGP next hops through the OSPF graph.
 - Incident analysis compares the selected best routes and probe results before and after topology mutations such as `link-down` and `bgp-down`.
 
+## Validation
+
+The `validate` command is intended to make topology assumptions visible instead of silently accepting them. In the example topology, the baseline validation report highlights that the same market prefix is originated by two routers, which is valid but policy-sensitive.
+
+```text
+Validation report for Trading Fabric Lab
+Errors: 0
+Warnings: 1
+
+Warnings:
+- [multi-origin-prefix] Prefix 198.18.10.0/24 is originated by multiple routers (market-a, market-b); best-path selection will depend on policy and topology state.
+```
+
+## Additional Documentation
+
+- [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) documents the boundaries of the simulation model.
+- [docs/architecture.md](docs/architecture.md) describes the internal design and protocol flow.
+
 ## Repository Layout
 
 ```text
+docs/
+  architecture.md
 src/control_plane_lab/
   cli.py            # command-line interface
   loader.py         # topology and scenario loading
   models.py         # topology schema
   simulation.py     # OSPF, BGP, forwarding, and incident analysis
+  validation.py     # validation warnings and topology quality checks
 examples/
   trading_fabric.json
   market_failover.json
 tests/
   test_simulation.py
+  test_validation.py
 .github/workflows/
   ci.yml
 ```

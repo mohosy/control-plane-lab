@@ -147,6 +147,8 @@ def apply_events(topology: Topology, events: Sequence[Event]) -> Topology:
         if event.kind in {"withdraw-prefix", "restore-prefix"}:
             if not event.router or event.prefix is None:
                 raise ValueError("Prefix event requires router and prefix")
+            if event.router not in mutated.routers:
+                raise ValueError("Unknown router in prefix event: {0}".format(event.router))
             router = mutated.routers[event.router]
             existing = [item for item in router.connected_prefixes if item.prefix == event.prefix]
             if event.kind == "withdraw-prefix":
