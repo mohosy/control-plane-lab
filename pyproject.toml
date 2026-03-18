@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "control-plane-lab"
+version = "0.1.0"
+description = "A control-plane simulator for studying routing behavior, failover, and network incidents."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Mo Shirmohammad" }
+]
+license = { text = "MIT" }
+keywords = ["networking", "bgp", "ospf", "simulation", "routing", "automation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Topic :: Internet",
+  "Topic :: System :: Networking"
+]
+
+[project.scripts]
+cplab = "control_plane_lab.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

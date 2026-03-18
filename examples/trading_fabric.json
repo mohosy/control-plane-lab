@@ -1,0 +1,284 @@
+{
+  "name": "Trading Fabric Lab",
+  "routers": [
+    {
+      "name": "ny5-core-a",
+      "asn": 65000,
+      "router_id": "10.255.0.1",
+      "connected_prefixes": [
+        {
+          "prefix": "10.10.0.0/24",
+          "advertise_ospf": true,
+          "description": "operations vlan"
+        }
+      ]
+    },
+    {
+      "name": "ny5-core-b",
+      "asn": 65000,
+      "router_id": "10.255.0.2",
+      "connected_prefixes": [
+        {
+          "prefix": "10.10.1.0/24",
+          "advertise_ospf": true,
+          "description": "services vlan"
+        }
+      ]
+    },
+    {
+      "name": "ny5-edge-inet",
+      "asn": 65000,
+      "router_id": "10.255.0.10",
+      "connected_prefixes": [
+        {
+          "prefix": "172.31.200.0/24",
+          "advertise_ospf": true,
+          "advertise_bgp": true,
+          "description": "public egress block"
+        }
+      ]
+    },
+    {
+      "name": "ny5-edge-md",
+      "asn": 65000,
+      "router_id": "10.255.0.11",
+      "connected_prefixes": [
+        {
+          "prefix": "172.31.210.0/24",
+          "advertise_ospf": true,
+          "description": "market data services"
+        }
+      ]
+    },
+    {
+      "name": "isp-a",
+      "asn": 65100,
+      "router_id": "192.0.2.1",
+      "connected_prefixes": [
+        {
+          "prefix": "203.0.113.0/24",
+          "advertise_bgp": true,
+          "description": "internet transit a"
+        }
+      ]
+    },
+    {
+      "name": "isp-b",
+      "asn": 65110,
+      "router_id": "192.0.2.2",
+      "connected_prefixes": [
+        {
+          "prefix": "203.0.114.0/24",
+          "advertise_bgp": true,
+          "description": "internet transit b"
+        }
+      ]
+    },
+    {
+      "name": "market-a",
+      "asn": 65200,
+      "router_id": "198.51.100.1",
+      "connected_prefixes": [
+        {
+          "prefix": "198.18.10.0/24",
+          "advertise_bgp": true,
+          "description": "primary market feed"
+        }
+      ]
+    },
+    {
+      "name": "market-b",
+      "asn": 65210,
+      "router_id": "198.51.100.2",
+      "connected_prefixes": [
+        {
+          "prefix": "198.18.10.0/24",
+          "advertise_bgp": true,
+          "description": "secondary path for primary market feed"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "endpoints": ["ny5-core-a", "ny5-core-b"],
+      "network": "10.0.0.0/31",
+      "addresses": {
+        "ny5-core-a": "10.0.0.0",
+        "ny5-core-b": "10.0.0.1"
+      },
+      "metric": 5,
+      "ospf": true,
+      "description": "core fabric"
+    },
+    {
+      "endpoints": ["ny5-core-a", "ny5-edge-inet"],
+      "network": "10.0.0.2/31",
+      "addresses": {
+        "ny5-core-a": "10.0.0.2",
+        "ny5-edge-inet": "10.0.0.3"
+      },
+      "metric": 10,
+      "ospf": true
+    },
+    {
+      "endpoints": ["ny5-core-b", "ny5-edge-inet"],
+      "network": "10.0.0.4/31",
+      "addresses": {
+        "ny5-core-b": "10.0.0.4",
+        "ny5-edge-inet": "10.0.0.5"
+      },
+      "metric": 10,
+      "ospf": true
+    },
+    {
+      "endpoints": ["ny5-core-a", "ny5-edge-md"],
+      "network": "10.0.0.6/31",
+      "addresses": {
+        "ny5-core-a": "10.0.0.6",
+        "ny5-edge-md": "10.0.0.7"
+      },
+      "metric": 15,
+      "ospf": true
+    },
+    {
+      "endpoints": ["ny5-core-b", "ny5-edge-md"],
+      "network": "10.0.0.8/31",
+      "addresses": {
+        "ny5-core-b": "10.0.0.8",
+        "ny5-edge-md": "10.0.0.9"
+      },
+      "metric": 10,
+      "ospf": true
+    },
+    {
+      "endpoints": ["ny5-edge-inet", "isp-a"],
+      "network": "192.0.2.8/31",
+      "addresses": {
+        "ny5-edge-inet": "192.0.2.8",
+        "isp-a": "192.0.2.9"
+      },
+      "metric": 1,
+      "ospf": false
+    },
+    {
+      "endpoints": ["ny5-edge-inet", "isp-b"],
+      "network": "192.0.2.10/31",
+      "addresses": {
+        "ny5-edge-inet": "192.0.2.10",
+        "isp-b": "192.0.2.11"
+      },
+      "metric": 1,
+      "ospf": false
+    },
+    {
+      "endpoints": ["ny5-edge-md", "market-a"],
+      "network": "198.51.100.8/31",
+      "addresses": {
+        "ny5-edge-md": "198.51.100.8",
+        "market-a": "198.51.100.9"
+      },
+      "metric": 1,
+      "ospf": false
+    },
+    {
+      "endpoints": ["ny5-edge-md", "market-b"],
+      "network": "198.51.100.10/31",
+      "addresses": {
+        "ny5-edge-md": "198.51.100.10",
+        "market-b": "198.51.100.11"
+      },
+      "metric": 1,
+      "ospf": false
+    }
+  ],
+  "bgp_sessions": [
+    {
+      "local": "ny5-edge-inet",
+      "peer": "isp-a",
+      "export_prefixes": ["172.31.200.0/24"],
+      "description": "primary internet uplink"
+    },
+    {
+      "local": "isp-a",
+      "peer": "ny5-edge-inet",
+      "import_local_pref": 250,
+      "description": "primary internet uplink"
+    },
+    {
+      "local": "ny5-edge-inet",
+      "peer": "isp-b",
+      "export_prefixes": ["172.31.200.0/24"],
+      "description": "backup internet uplink"
+    },
+    {
+      "local": "isp-b",
+      "peer": "ny5-edge-inet",
+      "import_local_pref": 200,
+      "description": "backup internet uplink"
+    },
+    {
+      "local": "ny5-edge-md",
+      "peer": "market-a",
+      "description": "primary market feed"
+    },
+    {
+      "local": "market-a",
+      "peer": "ny5-edge-md",
+      "import_local_pref": 300,
+      "description": "primary market feed"
+    },
+    {
+      "local": "ny5-edge-md",
+      "peer": "market-b",
+      "description": "secondary market feed"
+    },
+    {
+      "local": "market-b",
+      "peer": "ny5-edge-md",
+      "import_local_pref": 250,
+      "description": "secondary market feed"
+    },
+    {
+      "local": "ny5-edge-inet",
+      "peer": "ny5-core-a",
+      "next_hop_self": true,
+      "description": "iBGP distribution"
+    },
+    {
+      "local": "ny5-edge-inet",
+      "peer": "ny5-core-b",
+      "next_hop_self": true,
+      "description": "iBGP distribution"
+    },
+    {
+      "local": "ny5-edge-md",
+      "peer": "ny5-core-a",
+      "next_hop_self": true,
+      "description": "iBGP distribution"
+    },
+    {
+      "local": "ny5-edge-md",
+      "peer": "ny5-core-b",
+      "next_hop_self": true,
+      "description": "iBGP distribution"
+    }
+  ],
+  "probes": [
+    {
+      "name": "Market data from core-a",
+      "source": "ny5-core-a",
+      "destination": "198.18.10.10"
+    },
+    {
+      "name": "Internet egress from core-b",
+      "source": "ny5-core-b",
+      "destination": "203.0.113.10"
+    },
+    {
+      "name": "Market feed from edge-md",
+      "source": "ny5-edge-md",
+      "destination": "198.18.10.25"
+    }
+  ]
+}
